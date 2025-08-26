@@ -10,6 +10,8 @@ jobs:
     steps:
       - name: Checkout 
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
      
       - name: Run test
         run: make test
@@ -18,3 +20,8 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push
+        env:
+          APP: "kbot"
+          REGISTRY: ${{ secrets.DOCKER_USERNAME }}
+        run: make image push

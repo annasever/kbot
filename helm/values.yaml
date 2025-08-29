@@ -6,7 +6,7 @@ serviceAccount:
 image:
   registry: "ghcr.io"
   repository: "annasever/kbot"
-  tag: "v1.0.0-0000000"
+  tag: "v1.0.0-bdaa587"
   os: linux
   arch: amd64
   

@@ -1,0 +1,9 @@
+image:
+  repository: annasever
+  tag: "v1.0.0"
+  arch: amd64
+
+secret:
+  name: kbot
+  tokenKey: token
+  tokenName: TELE_TOKEN

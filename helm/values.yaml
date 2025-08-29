@@ -1,0 +1,19 @@
+replicaCount: 1
+
+serviceAccount:
+  create: true   
+
+image:
+  registry: "ghcr.io"
+  repository: "annasever/kbot"
+  tag: "v1.0.0-0000000"
+  os: linux
+  arch: amd64
+  
+service:
+  port: 8080
+
+secret:
+  name: kbot
+  tokenKey: token
+  tokenName: TELE_TOKEN

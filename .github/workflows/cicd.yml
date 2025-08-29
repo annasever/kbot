@@ -16,7 +16,7 @@ env:
   APP: kbot
 
 jobs:
-  build-push-deploy:
+  build-push:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,28 +56,11 @@ jobs:
           if [[ -n "$(git status --porcelain)" ]]; then
             git config user.name "github-actions"
             git config user.email "github-actions@github.com"
+            git pull --rebase origin develop
             git add helm/values.yaml helm/Chart.yaml
             git commit -m "update image tag to ${TAG_BASE}"
-            git pull --rebase origin develop
             git push
           fi
-
-      - name: Install ArgoCD CLI
-        run: |
-          curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-          chmod +x /usr/local/bin/argocd
-
-      - name: ArgoCD login
-        run: |
-          argocd login ${{ secrets.ARGOCD_SERVER }} \
-            --username ${{ secrets.ARGOCD_USERNAME }} \
-            --password ${{ secrets.ARGOCD_PASSWORD }} \
-            --insecure
-
-      - name: Sync Application
-        run: |
-          argocd app sync kbot
-          argocd app wait kbot --health --timeout 300
 
       - name: Print final image
         run: echo "${IMAGE}:${TAG}"

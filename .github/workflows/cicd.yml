@@ -56,11 +56,19 @@ jobs:
           if [[ -n "$(git status --porcelain)" ]]; then
             git config user.name "github-actions"
             git config user.email "github-actions@github.com"
-            git pull --rebase origin develop
+
             git add helm/values.yaml helm/Chart.yaml
-            git commit -m "update image tag to ${TAG_BASE}"
+            git stash
+
+            git pull --rebase origin develop
+
+            git stash pop || true
+
+            git add helm/values.yaml helm/Chart.yaml
+            git commit -m "update image tag to ${TAG_BASE}" || echo "No changes to commit"
             git push
           fi
+
 
       - name: Print final image
         run: echo "${IMAGE}:${TAG}"

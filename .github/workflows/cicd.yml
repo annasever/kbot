@@ -58,6 +58,7 @@ jobs:
             git config user.email "github-actions@github.com"
             git add helm/values.yaml helm/Chart.yaml
             git commit -m "update image tag to ${TAG_BASE}"
+            git pull --rebase origin develop
             git push
           fi
 

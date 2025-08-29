@@ -1,49 +1,82 @@
-name: KBOT-CICD
+name: CI-CD
 
-on: push
+on:
+  push:
+    branches: ["develop"]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  OS: linux
+  ARCH: amd64
+  REGISTRY: ghcr.io
+  OWNER: annasever
+  APP: kbot
 
 jobs:
-  ci:
-    name: CI
+  build-push-deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout 
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      - name: Set version and tags
+        run: |
+          VERSION="v1.0.0"
+          SHORT_SHA=${GITHUB_SHA::7}
+          TAG_BASE="${VERSION}-${SHORT_SHA}"
+          echo "TAG_BASE=$TAG_BASE" >> $GITHUB_ENV
+          echo "TAG=$TAG_BASE-${OS}-${ARCH}" >> $GITHUB_ENV
+          echo "IMAGE=${REGISTRY}/${OWNER}/${APP}" >> $GITHUB_ENV
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          fetch-depth: 0
-     
-      - name: Run test
-        run: make test
-      - name: Docker Hub login
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-      - name: Build and push
-        env:
-          APP: "kbot"
-          REGISTRY: ${{ secrets.DOCKER_USERNAME }}
-        run: make image push
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-  cd:
-    name: CD
-    needs: ci
-    runs-on: ubuntu-latest
+      - name: Build and Push
+        run: |
+          docker build --platform=${OS}/${ARCH} -t ${IMAGE}:${TAG} .
+          docker push ${IMAGE}:${TAG}
 
-    steps:
+      - name: Update Helm values
+        run: |
+          sed -i 's|^\(\s*registry:\s*\).*|\1"'"${REGISTRY}"'"|' helm/values.yaml
+          sed -i 's|^\(\s*repository:\s*\).*|\1"'"${OWNER}/${APP}"'"|' helm/values.yaml
+          sed -i 's|^\(\s*tag:\s*\).*|\1"'"${TAG_BASE}"'"|' helm/values.yaml
+          sed -i 's|^\(\s*os:\s*\).*|\1'"${OS}"'|' helm/values.yaml
+          sed -i 's|^\(\s*arch:\s*\).*|\1'"${ARCH}"'|' helm/values.yaml
+          sed -i 's|^\(appVersion:\s*\).*|\1"'"${TAG_BASE}"'"|' helm/Chart.yaml
 
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - run: echo "VERSION=$(git describe --tags --abbrev=0)-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - name: Commit updated Helm chart
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            git add helm/values.yaml helm/Chart.yaml
+            git commit -m "update image tag to ${TAG_BASE}"
+            git push
+          fi
 
-      - uses: mikefarah/yq@master
-        with:
-          cmd: yq -i '.image.tag = strenv(VERSION)' values.yaml
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x /usr/local/bin/argocd
 
-      - run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git commit -am "update version $VERSION"
-          git push
+      - name: ArgoCD login
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER }} \
+            --username ${{ secrets.ARGOCD_USERNAME }} \
+            --password ${{ secrets.ARGOCD_PASSWORD }} \
+            --insecure
+
+      - name: Sync Application
+        run: |
+          argocd app sync kbot
+          argocd app wait kbot --health --timeout 300
+
+      - name: Print final image
+        run: echo "${IMAGE}:${TAG}"

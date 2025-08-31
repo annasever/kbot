@@ -26,7 +26,7 @@ spec:
   - name: builder
     image: ubuntu:20.04
     command: ["/bin/sh", "-c"]
-    args: ["apt-get update && apt-get install -y make && sleep infinity"]
+    args: ["apt-get update && apt-get install -y make golang-go && sleep infinity"]
     workingDir: /home/jenkins/agent
     tty: true
     resources:

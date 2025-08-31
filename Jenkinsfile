@@ -1,11 +1,6 @@
 pipeline {
-    agent {
-        docker {
-            image 'golang:latest'
-            args '-u root'
-        }
-    }
-    
+    agent { label 'go-docker' }
+
     parameters {
         choice(
             name: 'OS',
@@ -28,94 +23,68 @@ pipeline {
             description: 'Skip running linter'
         )
     }
-    
+
+    environment {
+        TARGETOS = "${params.OS}"
+        TARGETARCH = "${params.ARCH}"
+    }
+
     stages {
         stage('Checkout') {
             steps {
-                echo "Cloning repository: https://github.com/annasever/kbot.git"
+                echo "Cloning repository"
                 git branch: 'main', url: 'https://github.com/annasever/kbot.git'
             }
         }
-        
-        stage('Install Dependencies') {
-            steps {
-                echo "Installing dependencies for OS=${params.OS}, ARCH=${params.ARCH}"
-                sh '''
-                    apt-get update
-                    apt-get install -y make
-                    if [ -f Makefile ]; then
-                        make install-linux
-                    else
-                        echo "Makefile not found, skipping install-linux"
-                    fi
-                '''
-            }
-        }
-        
+
         stage('Lint') {
-            when {
-                expression { !params.SKIP_LINT }
-            }
+            when { expression { !params.SKIP_LINT } }
             steps {
-                echo "Running linter for OS=${params.OS}, ARCH=${params.ARCH}"
-                sh '''
-                    if [ -f Makefile ]; then
-                        make lint OS=${OS} ARCH=${ARCH}
-                    else
-                        echo "Makefile not found, skipping lint"
-                    fi
-                '''
+                echo "Running linter"
+                sh 'make lint TARGETOS=${TARGETOS} TARGETARCH=${TARGETARCH}'
             }
         }
-        
+
         stage('Test') {
-            when {
-                expression { !params.SKIP_TESTS }
-            }
+            when { expression { !params.SKIP_TESTS } }
             steps {
-                echo "Running tests for OS=${params.OS}, ARCH=${params.ARCH}"
-                sh '''
-                    if [ -f Makefile ]; then
-                        make test OS=${OS} ARCH=${ARCH}
-                    else
-                        echo "Makefile not found, skipping tests"
-                    fi
-                '''
+                echo "Running tests"
+                sh 'make test TARGETOS=${TARGETOS} TARGETARCH=${TARGETARCH}'
             }
         }
-        
+
         stage('Build') {
             steps {
-                echo "Building for OS=${params.OS}, ARCH=${params.ARCH}"
-                sh '''
-                    if [ -f Makefile ]; then
-                        make build OS=${OS} ARCH=${ARCH}
-                    else
-                        echo "Makefile not found, performing default Go build"
-                        go build -o bin/kbot-${OS}-${ARCH} .
-                    fi
-                '''
+                echo "Building application"
+                sh 'make build TARGETOS=${TARGETOS} TARGETARCH=${TARGETARCH}'
             }
         }
-        
+
+        stage('Docker Image') {
+            steps {
+                echo "Building Docker image"
+                sh 'make image TARGETARCH=${TARGETARCH}'
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                echo "Pushing Docker image"
+                sh 'make push TARGETARCH=${TARGETARCH}'
+            }
+        }
+
         stage('Archive Artifacts') {
             steps {
-                echo "Archiving artifacts: bin/kbot-${params.OS}-${params.ARCH}"
-                archiveArtifacts artifacts: "bin/kbot-${params.OS}-${params.ARCH}", fingerprint: true, allowEmptyArchive: true
+                echo "Archiving binary"
+                archiveArtifacts artifacts: "kbot", fingerprint: true, allowEmptyArchive: true
             }
         }
     }
-    
+
     post {
-        always {
-            echo "Cleaning workspace"
-            cleanWs()
-        }
-        success {
-            echo "Build for ${params.OS}-${params.ARCH} completed successfully!"
-        }
-        failure {
-            echo "Build for ${params.OS}-${params.ARCH} failed!"
-        }
+        always { echo "Cleaning workspace"; cleanWs() }
+        success { echo "Build for ${TARGETOS}-${TARGETARCH} completed successfully!" }
+        failure { echo "Build for ${TARGETOS}-${TARGETARCH} failed!" }
     }
 }

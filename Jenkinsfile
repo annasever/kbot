@@ -37,6 +37,7 @@ pipeline {
                 expression { return !params.SKIP_LINT }
             }
             steps {
+                echo "Running linter..."
                 sh "make lint"
             }
         }
@@ -46,6 +47,7 @@ pipeline {
                 expression { return !params.SKIP_TESTS }
             }
             steps {
+                echo "Running tests..."
                 sh "make test"
             }
         }

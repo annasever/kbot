@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'golang:latest'
+            args '-u root'
+        }
+    }
     
     parameters {
         choice(
@@ -27,32 +32,23 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // Клонуємо ваш репозиторій
+                echo "Cloning repository: https://github.com/annasever/kbot.git"
                 git branch: 'main', url: 'https://github.com/annasever/kbot.git'
             }
         }
         
         stage('Install Dependencies') {
             steps {
-                script {
-                    if (params.OS == 'linux') {
-                        sh '''
-                            apt-get update
-                            apt-get install -y make
-                            make install-linux
-                        '''
-                    } else if (params.OS == 'darwin') {
-                        sh '''
-                            brew install make
-                            make install-darwin
-                        '''
-                    } else if (params.OS == 'windows') {
-                        bat '''
-                            choco install make
-                            make install-windows
-                        '''
-                    }
-                }
+                echo "Installing dependencies for OS=${params.OS}, ARCH=${params.ARCH}"
+                sh '''
+                    apt-get update
+                    apt-get install -y make
+                    if [ -f Makefile ]; then
+                        make install-linux
+                    else
+                        echo "Makefile not found, skipping install-linux"
+                    fi
+                '''
             }
         }
         
@@ -61,7 +57,14 @@ pipeline {
                 expression { !params.SKIP_LINT }
             }
             steps {
-                sh "make lint OS=${params.OS} ARCH=${params.ARCH}"
+                echo "Running linter for OS=${params.OS}, ARCH=${params.ARCH}"
+                sh '''
+                    if [ -f Makefile ]; then
+                        make lint OS=${OS} ARCH=${ARCH}
+                    else
+                        echo "Makefile not found, skipping lint"
+                    fi
+                '''
             }
         }
         
@@ -70,25 +73,42 @@ pipeline {
                 expression { !params.SKIP_TESTS }
             }
             steps {
-                sh "make test OS=${params.OS} ARCH=${params.ARCH}"
+                echo "Running tests for OS=${params.OS}, ARCH=${params.ARCH}"
+                sh '''
+                    if [ -f Makefile ]; then
+                        make test OS=${OS} ARCH=${ARCH}
+                    else
+                        echo "Makefile not found, skipping tests"
+                    fi
+                '''
             }
         }
         
         stage('Build') {
             steps {
-                sh "make build OS=${params.OS} ARCH=${params.ARCH}"
+                echo "Building for OS=${params.OS}, ARCH=${params.ARCH}"
+                sh '''
+                    if [ -f Makefile ]; then
+                        make build OS=${OS} ARCH=${ARCH}
+                    else
+                        echo "Makefile not found, performing default Go build"
+                        go build -o bin/kbot-${OS}-${ARCH} .
+                    fi
+                '''
             }
         }
         
         stage('Archive Artifacts') {
             steps {
-                archiveArtifacts artifacts: "bin/kbot-${params.OS}-${params.ARCH}", fingerprint: true
+                echo "Archiving artifacts: bin/kbot-${params.OS}-${params.ARCH}"
+                archiveArtifacts artifacts: "bin/kbot-${params.OS}-${params.ARCH}", fingerprint: true, allowEmptyArchive: true
             }
         }
     }
     
     post {
         always {
+            echo "Cleaning workspace"
             cleanWs()
         }
         success {

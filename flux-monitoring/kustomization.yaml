@@ -5,7 +5,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m0s
-  path: "./otel/k8s"
+  path: "./../otel/k8s"
   prune: true
   sourceRef:
     kind: GitRepository

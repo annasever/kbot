@@ -12,3 +12,8 @@ spec:
     name: monitoring-repo
     namespace: flux-system
   targetNamespace: monitoring
+configMapGenerator:
+  - name: grafana-datasources
+    namespace: monitoring
+    files:
+      - datasources.yaml=../otel/grafana/grafana-datasources.yaml
